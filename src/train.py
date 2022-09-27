@@ -13,7 +13,7 @@ from model import Transformer
 SEED = 42
 LEARNING_RATE = 3e-4
 MAX_STEPS = 1000
-LOG_EVERY = 10
+VAL_PERIOD = 10
 
 NUM_LAYERS = 2
 NUM_HEADS = 4
@@ -32,24 +32,25 @@ class TrainingState(NamedTuple):
 class Metrics(NamedTuple):
     loss: jnp.ndarray
 
+def net_fn(tokens: jnp.ndarray) -> jnp.ndarray:
+    transformer = Transformer(
+        NUM_LAYERS,
+        NUM_HEADS,
+        EMB_DIM,
+        num_tokens=P
+    )
+
+    return transformer(tokens)
+
 
 def main(_):
-    def forward(tokens: jnp.ndarray) -> jnp.ndarray:
-        transformer = Transformer(
-            NUM_LAYERS,
-            NUM_HEADS,
-            EMB_DIM,
-            num_tokens=P
-        )
 
-        return transformer(tokens)
-
-
+    # Create network and optimiser
+    network = hk.without_apply_rng(hk.transform(net_fn))
     optimiser = optax.adam(LEARNING_RATE)
 
-    @hk.transform
-    def loss_fn(batch: Batch) -> jnp.ndarray:
-        logits = forward(batch.inputs)[:, -1]
+    def loss_fn(params: hk.Params, batch: Batch) -> jnp.ndarray:
+        logits = network.apply(params, batch.inputs)[:, -1]
         targets = jax.nn.one_hot(batch.targets, num_classes=P)
         assert logits.shape == targets.shape
 
@@ -57,10 +58,16 @@ def main(_):
         return -jnp.sum(log_likelihood)
 
     @jax.jit
+    def evaluate(params: hk.Params, batch: Batch) -> jnp.ndarray:
+        logits = network.apply(params, batch.inputs)[:, -1]
+        preds = jnp.argmax(logits, axis=-1)
+        return jnp.mean(preds == batch.targets)
+
+    @jax.jit
     def update(state: TrainingState, data: Batch) -> Tuple[TrainingState, Metrics]:
         rng, new_rng = jax.random.split(state.rng)
-        loss_and_grad_fn = jax.value_and_grad(loss_fn.apply)
-        loss, grads = loss_and_grad_fn(state.params, rng, data)
+        loss_and_grad_fn = jax.value_and_grad(loss_fn)
+        loss, grads = loss_and_grad_fn(state.params, data)
         
         updates, new_opt_state = optimiser.update(grads, state.opt_state)
         new_params = optax.apply_updates(state.params, updates)
@@ -77,9 +84,9 @@ def main(_):
         return new_state, metrics
 
     @jax.jit
-    def init(rng: jnp.ndarray, data: jnp.ndarray) -> TrainingState:
+    def init(rng: jnp.ndarray, batch: Batch) -> TrainingState:
         rng, init_rng = jax.random.split(rng)
-        initial_params = loss_fn.init(init_rng, data)
+        initial_params = network.init(init_rng, batch.inputs)
         initial_opt_state = optimiser.init(initial_params)
 
         return TrainingState(
@@ -94,11 +101,19 @@ def main(_):
     rng = jax.random.PRNGKey(SEED)
     state = init(rng, train_data)
 
+    train_acc = 0
+    test_acc = 0
+
     # Training loop
     p_bar = tqdm(range(MAX_STEPS))
     for step in p_bar:
         state, metrics = update(state, train_data)
-        p_bar.set_description(f'train/loss: {metrics.loss:.2f}')
+        p_bar.set_description(f'train/loss: {metrics.loss:.2f}, train/acc: {train_acc:.2f}, test/acc: {test_acc:.2f}')
+
+        # Evaluate on test set
+        if step % VAL_PERIOD == 0:
+            train_acc = evaluate(state.params, train_data)
+            test_acc = evaluate(state.params, test_data)
 
 
 if __name__ == '__main__':

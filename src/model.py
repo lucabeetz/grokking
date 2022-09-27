@@ -16,11 +16,11 @@ class DecoderBlock(hk.Module):
         _, seq_len, emb_dim = embs.shape
 
         # Create attention mask
-        attn_mask = jnp.full((seq_len, seq_len), float('-inf'))
-        attn_mask = jnp.triu(attn_mask, diag=1)
+        attn_mask = jnp.tril(jnp.ones((1, 1, seq_len, seq_len)))
 
         # MultiHeadAttention
-        attn_block = hk.MultiHeadAttention(self.num_heads, emb_dim, model_size=emb_dim)
+        initializer = hk.initializers.VarianceScaling(2 / 2)
+        attn_block = hk.MultiHeadAttention(self.num_heads, emb_dim, model_size=emb_dim, w_init=initializer)
 
         # FFN
         ffn = hk.Sequential([
@@ -45,7 +45,6 @@ class Transformer(hk.Module):
     num_layers: int
     num_heads: int
     emb_dim: int
-    drop_rate: float
     num_tokens: int
 
     def __call__(self, idx: jnp.ndarray, is_training: bool = True):

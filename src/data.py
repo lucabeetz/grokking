@@ -4,7 +4,7 @@ from typing import NamedTuple
 
 class Batch(NamedTuple):
     inputs: np.ndarray
-    labels: np.ndarray
+    targets: np.ndarray
 
 def get_operation(op_key: str, p: int):
     """Get matching lambda function for binary operation"""
@@ -48,4 +48,4 @@ def get_dataset(op_key: str, train_split: float, data_fraction: float, p: int):
 
     train_size = int(len(inputs) * train_split)
 
-    return (inputs[:train_size], labels[:train_size]), (inputs[train_size:], labels[train_size:])
+    return Batch(inputs[:train_size], labels[:train_size]), Batch(inputs[train_size:], labels[train_size:])

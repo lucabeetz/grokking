@@ -13,6 +13,7 @@ from model import Transformer
 
 SEED = 42
 LEARNING_RATE = 3e-4
+L2_WEIGHT = 1
 MAX_STEPS = 1000
 VAL_PERIOD = 10
 
@@ -52,12 +53,15 @@ def main(_):
     optimiser = optax.adam(LEARNING_RATE)
 
     def loss_fn(params: hk.Params, batch: Batch) -> jnp.ndarray:
+        batch_size = batch.inputs.shape[0]
         logits = network.apply(params, batch.inputs)[:, -1]
         targets = jax.nn.one_hot(batch.targets, num_classes=P)
         assert logits.shape == targets.shape
 
         log_likelihood = jnp.sum(targets * jax.nn.log_softmax(logits), axis=-1)
-        return -jnp.sum(log_likelihood)
+
+        l2_regulariser = 0.5 * sum(jnp.sum(jnp.square(p)) for p in jax.tree_util.tree_leaves(params))
+        return -jnp.sum(log_likelihood) / batch_size + L2_WEIGHT * l2_regulariser
 
     @jax.jit
     def evaluate(params: hk.Params, batch: Batch) -> jnp.ndarray:

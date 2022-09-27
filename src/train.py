@@ -12,9 +12,9 @@ from data import Batch, get_dataset
 from model import Transformer
 
 SEED = 42
-LEARNING_RATE = 3e-4
+LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 1
-MAX_STEPS = 1000
+MAX_STEPS = 10_000
 VAL_PERIOD = 10
 
 NUM_LAYERS = 2

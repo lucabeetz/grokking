@@ -13,7 +13,7 @@ from model import Transformer
 
 SEED = 42
 LEARNING_RATE = 3e-4
-L2_WEIGHT = 1
+WEIGHT_DECAY = 1
 MAX_STEPS = 1000
 VAL_PERIOD = 10
 
@@ -50,7 +50,7 @@ def main(_):
 
     # Create network and optimiser
     network = hk.without_apply_rng(hk.transform(net_fn))
-    optimiser = optax.adam(LEARNING_RATE)
+    optimiser = optax.adamw(learning_rate=LEARNING_RATE, b1=0.9, b2=0.98, weight_decay=WEIGHT_DECAY)
 
     def loss_fn(params: hk.Params, batch: Batch) -> jnp.ndarray:
         batch_size = batch.inputs.shape[0]
@@ -59,9 +59,7 @@ def main(_):
         assert logits.shape == targets.shape
 
         log_likelihood = jnp.sum(targets * jax.nn.log_softmax(logits), axis=-1)
-
-        l2_regulariser = 0.5 * sum(jnp.sum(jnp.square(p)) for p in jax.tree_util.tree_leaves(params))
-        return -jnp.sum(log_likelihood) / batch_size + L2_WEIGHT * l2_regulariser
+        return -jnp.sum(log_likelihood) / batch_size
 
     @jax.jit
     def evaluate(params: hk.Params, batch: Batch) -> jnp.ndarray:
@@ -75,7 +73,7 @@ def main(_):
         loss_and_grad_fn = jax.value_and_grad(loss_fn)
         loss, grads = loss_and_grad_fn(state.params, data)
         
-        updates, new_opt_state = optimiser.update(grads, state.opt_state)
+        updates, new_opt_state = optimiser.update(grads, state.opt_state, state.params)
         new_params = optax.apply_updates(state.params, updates)
 
         new_state = TrainingState(

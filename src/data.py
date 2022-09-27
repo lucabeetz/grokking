@@ -1,5 +1,10 @@
 import itertools
 import numpy as np
+from typing import NamedTuple
+
+class Batch(NamedTuple):
+    inputs: np.ndarray
+    labels: np.ndarray
 
 def get_operation(op_key: str, p: int):
     """Get matching lambda function for binary operation"""
@@ -10,7 +15,7 @@ def get_operation(op_key: str, p: int):
 
     return OPERATIONS[op_key]
 
-def get_dataset(op_key: str, p: int, fraction: float, op_token: int, eq_token: int):
+def create_training_data(op_key: str, p: int, data_fraction: float, op_token: int, eq_token: int):
     """Create dataset for binary operation"""
 
     assert op_key in ['x+y']
@@ -32,7 +37,15 @@ def get_dataset(op_key: str, p: int, fraction: float, op_token: int, eq_token: i
 
     # Shuffle data and get fraction of total dataset
     np.random.shuffle(data)
-    data = data[:int(data.shape[0] * fraction)]
+    data = data[:int(data.shape[0] * data_fraction)]
 
     return data[:, :4], data[:, 4]
 
+def get_dataset(op_key: str, train_split: float, data_fraction: float, p: int):
+    """Get train and test splits for given `op_key`"""
+
+    inputs, labels = create_training_data(op_key, p, data_fraction, p, p+1)
+
+    train_size = int(len(inputs) * train_split)
+
+    return (inputs[:train_size], labels[:train_size]), (inputs[train_size:], labels[train_size:])

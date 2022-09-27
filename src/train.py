@@ -1,4 +1,5 @@
 import jax
+import wandb
 import optax
 import haiku as hk
 import numpy as np
@@ -19,8 +20,8 @@ NUM_LAYERS = 2
 NUM_HEADS = 4
 EMB_DIM = 128
 
-P = 10
-
+P = 97
+TRAIN_SPLIT = 0.5
 
 class TrainingState(NamedTuple):
     params: hk.Params
@@ -44,6 +45,7 @@ def net_fn(tokens: jnp.ndarray) -> jnp.ndarray:
 
 
 def main(_):
+    wandb.init('grokking')
 
     # Create network and optimiser
     network = hk.without_apply_rng(hk.transform(net_fn))
@@ -96,7 +98,7 @@ def main(_):
             step=np.array([0])
         )
 
-    train_data, test_data = get_dataset('x+y', 0.8, 1.0, P)
+    train_data, test_data = get_dataset('x+y', TRAIN_SPLIT, P)
 
     rng = jax.random.PRNGKey(SEED)
     state = init(rng, train_data)
@@ -108,12 +110,23 @@ def main(_):
     p_bar = tqdm(range(MAX_STEPS))
     for step in p_bar:
         state, metrics = update(state, train_data)
+        wandb.log({'train/loss': metrics.loss, 'step': step})
+
         p_bar.set_description(f'train/loss: {metrics.loss:.2f}, train/acc: {train_acc:.2f}, test/acc: {test_acc:.2f}')
 
         # Evaluate on test set
         if step % VAL_PERIOD == 0:
             train_acc = evaluate(state.params, train_data)
             test_acc = evaluate(state.params, test_data)
+            test_loss = loss_fn(state.params, test_data)
+
+            metrics = {
+                'train/acc': train_acc,
+                'test/acc': test_acc,
+                'test/loss': test_loss,
+                'step': step
+            }
+            wandb.log(metrics)
 
 
 if __name__ == '__main__':

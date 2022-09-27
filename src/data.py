@@ -15,7 +15,7 @@ def get_operation(op_key: str, p: int):
 
     return OPERATIONS[op_key]
 
-def create_training_data(op_key: str, p: int, data_fraction: float, op_token: int, eq_token: int):
+def create_training_data(op_key: str, p: int, op_token: int, eq_token: int):
     """Create dataset for binary operation"""
 
     assert op_key in ['x+y']
@@ -35,16 +35,15 @@ def create_training_data(op_key: str, p: int, data_fraction: float, op_token: in
     eq_tokens = np.ones_like(y) * eq_token
     data = np.stack([x, op_tokens, y, eq_tokens, labels], axis=1)
 
-    # Shuffle data and get fraction of total dataset
+    # Shuffle data
     np.random.shuffle(data)
-    data = data[:int(data.shape[0] * data_fraction)]
 
     return data[:, :4], data[:, 4]
 
-def get_dataset(op_key: str, train_split: float, data_fraction: float, p: int):
+def get_dataset(op_key: str, train_split: float, p: int):
     """Get train and test splits for given `op_key`"""
 
-    inputs, labels = create_training_data(op_key, p, data_fraction, p, p+1)
+    inputs, labels = create_training_data(op_key, p, p, p+1)
 
     train_size = int(len(inputs) * train_split)
 
